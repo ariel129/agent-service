@@ -17,7 +17,7 @@ begin
 end;
 
 [Files]
-Source: "bin\Release\net6.0\publish\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Run]
 Filename: "{app}\AgentService.exe"; Description: "Launch My Service"; Flags: postinstall runascurrentuser skipifsilent
