@@ -30,7 +30,7 @@ jobs:
       run: choco install innosetup
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     - name: Create installer
-      run: iscc ./setup.iss
+      run: iscc ./setup-script.iss
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     - name: Create Release
       id: create_release
