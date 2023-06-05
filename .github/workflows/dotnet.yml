@@ -2,14 +2,14 @@ name: .NET CI/CD
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ master ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ master ]
 
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
     - uses: actions/checkout@v2
@@ -24,10 +24,13 @@ jobs:
     - name: Test
       run: dotnet test --no-build --verbosity normal
     - name: Publish
-      run: dotnet publish --configuration Release --output ./publish
+      run: dotnet publish --configuration Release --output ./publish --runtime win-x64 --self-contained true
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-    - name: Zip artifact
-      run: zip -r my_worker_service.zip ./publish/*
+    - name: Install Inno Setup
+      run: choco install innosetup
+      if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    - name: Create installer
+      run: iscc ./setup.iss
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     - name: Create Release
       id: create_release
@@ -47,7 +50,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./my_worker_service.zip
-        asset_name: my_worker_service.zip
-        asset_content_type: application/zip
+        asset_path: ./installer.exe
+        asset_name: installer.exe
+        asset_content_type: application/octet-stream
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
