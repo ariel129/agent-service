@@ -50,7 +50,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./installer.exe
-        asset_name: installer.exe
+        asset_path: ./AgentServiceInstaller.exe
+        asset_name: AgentServiceInstaller.exe
         asset_content_type: application/octet-stream
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
