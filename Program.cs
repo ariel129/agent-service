@@ -56,14 +56,14 @@ namespace AgentService
 
                 if (process.ExitCode == 0)
                 {
-                    Console.WriteLine("Service installed successfully.");
+                    Log.Information("Service installed successfully.");
                     ModifyServiceDescription(serviceName, description);
                     StartService(serviceName);
                 }
                 else
                 {
-                    Console.WriteLine("Failed to install service. Error message:");
-                    Console.WriteLine(output);
+                    Log.Error("Failed to install service. Error message:");
+                    Log.Error(output);
                 }
             }
         }
@@ -84,12 +84,12 @@ namespace AgentService
 
                 if (process.ExitCode == 0)
                 {
-                    Console.WriteLine("Service description updated successfully.");
+                    Log.Information("Service description updated successfully.");
                 }
                 else
                 {
-                    Console.WriteLine("Failed to update service description. Error message:");
-                    Console.WriteLine(output);
+                    Log.Error("Failed to update service description. Error message:");
+                    Log.Error(output);
                 }
             }
         }
@@ -110,12 +110,12 @@ namespace AgentService
 
                 if (process.ExitCode == 0)
                 {
-                    Console.WriteLine("Service started successfully.");
+                    Log.Information("Service started successfully.");
                 }
                 else
                 {
-                    Console.WriteLine("Failed to start service. Error message:");
-                    Console.WriteLine(output);
+                    Log.Error("Failed to start service. Error message:");
+                    Log.Error(output);
                 }
             }
         }
