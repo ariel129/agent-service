@@ -3,7 +3,7 @@ AppName=Agent Service
 AppVersion=1.0
 DefaultDirName={code:GetProgramFilesDir}\AgentService
 OutputBaseFilename=AgentServiceInstaller
-OutputDir=userdocs:Inno Setup Examples Output
+OutputDir=.
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64
 
