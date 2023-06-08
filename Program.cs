@@ -12,7 +12,7 @@ namespace AgentService
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         { 
             var progData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
             Log.Logger = new LoggerConfiguration()
@@ -20,7 +20,7 @@ namespace AgentService
             .WriteTo.File(Path.Combine(progData, "Agent", "agent-logs.txt"))
             .CreateLogger();
 
-            InstallService();
+            await InstallService();
             CreateHostBuilder(args).Build().Run();
         }
 
@@ -33,14 +33,16 @@ namespace AgentService
                     services.AddHostedService<Worker>();
                 });
 
-        public static void InstallService()
+        public static async Task InstallService()
         {
             string serviceName = "AgentService";
             string displayName = "Agent Service";
             string description = "This is an agent service.";
+            #nullable disable
             string executablePath = Process.GetCurrentProcess().MainModule.FileName;
+            #nullable restore
 
-            //ServiceUpdater.UpdateService(serviceName);
+            await ServiceUpdater.UpdateService(serviceName);
 
             using (Process process = new Process())
             {

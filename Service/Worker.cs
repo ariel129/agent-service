@@ -27,6 +27,11 @@ namespace AgentService.Service
 
                 // Start the process.
                 var process = Process.Start(psi);
+                if (process == null)
+                {
+                    _logger.LogError("Could not start the process.");
+                    continue;
+                }
 
                 // Read the output of the process.
                 var output = await process.StandardOutput.ReadToEndAsync();
