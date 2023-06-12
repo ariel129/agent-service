@@ -8,30 +8,42 @@ on:
 
 jobs:
   build:
-
     runs-on: windows-latest
 
     steps:
     - uses: actions/checkout@v2
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: 6.0.x
+
     - name: Restore dependencies
       run: dotnet restore
+
     - name: Build
       run: dotnet build --no-restore
+
     - name: Test
       run: dotnet test --no-build --verbosity normal
+
     - name: Publish
       run: dotnet publish --configuration Release --output ./publish --runtime win-x64 --self-contained true
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+
     - name: Install Inno Setup
       run: choco install innosetup
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+
     - name: Create installer
       run: iscc ./setup-script.iss
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+
+    - name: Archive production artifacts
+      run: |
+        Compress-Archive -Path ./publish/* -DestinationPath ./AgentServiceUpdate.zip
+      if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
@@ -43,8 +55,9 @@ jobs:
         draft: false
         prerelease: false
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-    - name: Upload Release Asset
-      id: upload-release-asset
+
+    - name: Upload Installer Release Asset
+      id: upload-installer-release-asset
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -53,4 +66,16 @@ jobs:
         asset_path: ./AgentServiceInstaller.exe
         asset_name: AgentServiceInstaller.exe
         asset_content_type: application/octet-stream
+      if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+
+    - name: Upload ZIP Release Asset
+      id: upload-zip-release-asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./AgentServiceUpdate.zip
+        asset_name: AgentServiceUpdate.zip
+        asset_content_type: application/zip
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
