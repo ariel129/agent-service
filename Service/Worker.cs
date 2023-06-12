@@ -13,6 +13,9 @@ namespace AgentService.Service
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            // Start the update checking task.
+            var updateTask = Task.Run(() => CheckForUpdatesPeriodically("AgentService", stoppingToken), stoppingToken);
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
@@ -44,9 +47,12 @@ namespace AgentService.Service
                 _logger.LogInformation("Command Output: {output}", output);
                 _logger.LogError("Command Error: {error}", error);
 
-                await Task.Delay(1000, stoppingToken);
+                await Task.Delay(1000 * 60, stoppingToken);
             }
+
+            await updateTask; // Optional, if you want to make sure update checking stops when main task stops.
         }
+
         public override Task StartAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("Worker starting at: {time}", DateTimeOffset.Now);
@@ -57,6 +63,28 @@ namespace AgentService.Service
         {
             _logger.LogInformation("Worker stopping at: {time}", DateTimeOffset.Now);
             return base.StopAsync(cancellationToken);
+        }
+
+        private static async Task CheckForUpdatesPeriodically(string serviceName, CancellationToken stoppingToken)
+        {
+            var random = new Random();
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                // Check for updates
+                var (isUpdateAvailable, releaseUrl) = await ServiceUpdater.CheckForUpdates(serviceName);
+
+                if (isUpdateAvailable)
+                {
+                    // Perform update logic
+                    await ServiceUpdater.PerformUpdate(serviceName, releaseUrl);
+                }
+
+                // Generate a random delay between 1 and 60 minutes.
+                int delay = random.Next(1, 61) * 60 * 1000;  // Convert minutes to milliseconds.
+
+                await Task.Delay(delay, stoppingToken);
+            }
         }
     }
 }

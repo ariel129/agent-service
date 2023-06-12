@@ -1,12 +1,6 @@
-using System;
-using System.Diagnostics;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using System.IO;
-using Serilog;
-using System.Linq;
-using System.Threading.Tasks;
-using AgentService.Service;
+using System.Diagnostics; 
+using Serilog; 
+using AgentService.Service; 
 
 namespace AgentService
 {
@@ -20,7 +14,7 @@ namespace AgentService
             .WriteTo.File(Path.Combine(progData, "Agent", "agent-logs.txt"))
             .CreateLogger();
 
-            await InstallService();
+            InstallService();
             CreateHostBuilder(args).Build().Run();
         }
 
@@ -33,7 +27,7 @@ namespace AgentService
                     services.AddHostedService<Worker>();
                 });
 
-        public static async Task InstallService()
+        public static void InstallService()
         {
             string serviceName = "AgentService";
             string displayName = "Agent Service";
@@ -41,8 +35,6 @@ namespace AgentService
             #nullable disable
             string executablePath = Process.GetCurrentProcess().MainModule.FileName;
             #nullable restore
-
-            await ServiceUpdater.UpdateService(serviceName);
 
             using (Process process = new Process())
             {

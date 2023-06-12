@@ -1,6 +1,14 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using Octokit;
+using System.ServiceProcess;
+using System.Net.Http;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.ComponentModel;
+using Newtonsoft.Json.Linq;
 
 namespace AgentService.Service
 {
@@ -8,40 +16,123 @@ namespace AgentService.Service
     {
         private const string Owner = "ariel129";
         private const string Repo = "agent-service";
-        private const string UpdateUrl = "https://example.com/update/package.zip";
-        private const string UpdateFilePath = "path/to/update/package.zip";
-        private const string UpdaterPath = "path/to/updater.exe";
-        private const string Token = "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";
 
-        private static GitHubClient _client = new GitHubClient(new ProductHeaderValue("agent-service"))
+        private static GitHubClient _client;
+        static ServiceUpdater()
         {
-            Credentials = new Credentials(Token)
-        };
+            var token = "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"; // use a standard name for the env variable
 
-        public static async Task UpdateService(string serviceName)
-        {
-            StopService(serviceName);
-            await DownloadLatestRelease();
-            StartService(serviceName);
+            if (string.IsNullOrWhiteSpace(token))
+                throw new InvalidOperationException("GitHub token not found in environment variables");
+
+            _client = new GitHubClient(new ProductHeaderValue("agent-service"))
+            {
+                Credentials = new Credentials(token)
+            };
         }
 
-        private static void StopService(string serviceName)
+        public static async Task<(bool, string)> CheckForUpdates(string serviceName)
         {
-            using (Process process = new Process())
+            try
             {
-                process.StartInfo.FileName = "sc";
-                process.StartInfo.Arguments = $"stop {serviceName}";
-                process.Start();
-                process.WaitForExit();
+                var (isNewReleaseAvailable, latestReleaseUrl) = await GetLatestReleaseUrl();
+
+                if (!isNewReleaseAvailable)
+                {
+                    Console.WriteLine("No new release available.");
+                    return (false, "");
+                }
+
+                StopService(serviceName);
+                Console.WriteLine(serviceName + " service is stopped...");
+
+                return (true, latestReleaseUrl);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An unexpected error occurred: {ex.Message}");
+                return (false, "");
             }
         }
+
+        public static void StopService(string serviceName)
+        {
+            if (!IsServiceRunning(serviceName))
+            {
+                Console.WriteLine("Service '{0}' is not running. Skipping stop command.", serviceName);
+                return;
+            }
+
+            var process = ExecuteCommand("sc", $"stop {serviceName}");
+
+            if (process.ExitCode != 0)
+            {
+                Console.WriteLine("Failed to stop service. Output:");
+                Console.WriteLine(process.StandardOutput.ReadToEnd());
+                throw new Exception("Failed to stop service");
+            }
+        }
+
+        public static void StartService(string serviceName)
+        {
+            if (IsServiceRunning(serviceName))
+            {
+                Console.WriteLine("Service '{0}' is already running. Skipping start command.", serviceName);
+                return;
+            }
+
+            var process = ExecuteCommand("sc", $"start {serviceName}");
+
+            if (process.ExitCode != 0)
+            {
+                Console.WriteLine("Failed to start service. Output:");
+                Console.WriteLine(process.StandardOutput.ReadToEnd());
+                throw new Exception("Failed to start service");
+            }
+        }
+
+        public static bool IsServiceRunning(string serviceName)
+        {
+            var service = ServiceController.GetServices().FirstOrDefault(s => s.ServiceName == serviceName);
+            return service != null && service.Status != ServiceControllerStatus.Stopped;
+        }
+
+        private static Process ExecuteCommand(string command, string arguments)
+        {
+            var psi = new ProcessStartInfo(command, arguments)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            var process = Process.Start(psi);
+            process.WaitForExit();
+
+            string standardOutput = process.StandardOutput.ReadToEnd();
+            string standardError = process.StandardError.ReadToEnd();
+
+            Console.WriteLine("Command output:");
+            Console.WriteLine(standardOutput);
+
+            if (!string.IsNullOrEmpty(standardError))
+            {
+                Console.WriteLine("Command error:");
+                Console.WriteLine(standardError);
+            }
+
+            return process;
+        }
+
 
         private static async Task DownloadLatestRelease()
         {
             try
             {
-                string latestReleaseUrl = await GetLatestReleaseUrl();
+                var (isisNewReleaseAvailable, latestReleaseUrl) = await GetLatestReleaseUrl();
 
+                Console.WriteLine(latestReleaseUrl);
                 if (string.IsNullOrEmpty(latestReleaseUrl))
                 {
                     Console.WriteLine("No latest release URL found.");
@@ -61,22 +152,21 @@ namespace AgentService.Service
 
                 using (HttpClient client = new HttpClient())
                 {
-                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token);
+                    client.Timeout = TimeSpan.FromMinutes(5);
 
-                    using (HttpResponseMessage response = await client.GetAsync(latestReleaseUrl))
+                    var response = await client.GetAsync(latestReleaseUrl);
+
+                    if (!response.IsSuccessStatusCode)
                     {
-                        if (!response.IsSuccessStatusCode)
-                        {
-                            Console.WriteLine($"Request error, HTTP {response.StatusCode}: {response.ReasonPhrase}");
-                            return;
-                        }
+                        Console.WriteLine($"Request error, HTTP {response.StatusCode}: {response.ReasonPhrase}");
+                        return;
+                    }
 
-                        using (Stream stream = await response.Content.ReadAsStreamAsync())
+                    using (var stream = await response.Content.ReadAsStreamAsync())
+                    {
+                        using (var fileStream = new FileStream(releaseFilePath, System.IO.FileMode.Create, FileAccess.Write, FileShare.None))
                         {
-                            using (FileStream fileStream = new FileStream(releaseFilePath, System.IO.FileMode.Create, FileAccess.Write, FileShare.None))
-                            {
-                                await stream.CopyToAsync(fileStream);
-                            }
+                            await stream.CopyToAsync(fileStream);
                         }
                     }
                 }
@@ -91,41 +181,46 @@ namespace AgentService.Service
             }
         }
 
-
-        private static void StartService(string serviceName)
-        {
-            using (Process process = new Process())
-            {
-                process.StartInfo.FileName = "sc";
-                process.StartInfo.Arguments = $"start {serviceName}";
-                process.Start();
-                process.WaitForExit();
-            }
-        }
-
-        private static async Task<string> GetLatestReleaseUrl()
+        private static async Task<(bool, string)> GetLatestReleaseUrl()
         {
             var releases = await _client.Repository.Release.GetAll(Owner, Repo);
 
-            if (!releases.Any())
+            if (releases == null || !releases.Any())
             {
                 Console.WriteLine("No releases found for this repository.");
-                #nullable disable
-                return null;
+                return (false, null);
             }
 
-            // Ordering the releases by their published date in descending order
             var latestRelease = releases.OrderByDescending(r => r.PublishedAt).First();
 
-            if (latestRelease.Assets.Count == 0)
+            // Compare latest version on GitHub with the current version
+            // You need to replace 'GetCurrentVersion()' with the method that returns your current application version
+            // if (latestRelease.TagName <= GetCurrentVersion())
+            //{
+            // return (false, null);
+            // }
+
+            var asset = latestRelease.Assets.FirstOrDefault(a => a.Name.EndsWith(".exe"));
+            if (asset == null)
             {
-                Console.WriteLine("No assets found for the latest release.");
-                return null;
+                Console.WriteLine("No .exe asset found for the latest release.");
+
+                return (false, null);
             }
 
-            string latestReleaseUrl = latestRelease.Assets[0].BrowserDownloadUrl;
+            string latestReleaseUrl = asset.BrowserDownloadUrl;
 
-            return latestReleaseUrl;
+            return (true, latestReleaseUrl);
+        }
+
+        public static async Task PerformUpdate(string serviceName, string releaseUrl)
+        {
+
+            var tempFilePath = Path.Combine(Path.GetTempPath(), $"{serviceName}_update.zip");
+
+            StartService(serviceName);
+            Console.WriteLine(tempFilePath + " service is started...");
+
         }
     }
 }
