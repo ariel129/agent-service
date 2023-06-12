@@ -20,7 +20,7 @@ namespace AgentService.Service
         private static GitHubClient _client;
         static ServiceUpdater()
         {
-            var token = "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"; // use a standard name for the env variable
+            var token = "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"; // use a standard name for the env variable
 
             if (string.IsNullOrWhiteSpace(token))
                 throw new InvalidOperationException("GitHub token not found in environment variables");
@@ -190,9 +190,9 @@ namespace AgentService.Service
                 Console.WriteLine("No releases found for this repository.");
                 return (false, null);
             }
-
+         
             var latestRelease = releases.OrderByDescending(r => r.PublishedAt).First();
-
+            Console.WriteLine(latestRelease.TagName);
             // Compare latest version on GitHub with the current version
             // You need to replace 'GetCurrentVersion()' with the method that returns your current application version
             // if (latestRelease.TagName <= GetCurrentVersion())
