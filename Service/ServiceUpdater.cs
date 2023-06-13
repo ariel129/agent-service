@@ -22,7 +22,7 @@ namespace AgentService.Service
         private static GitHubClient _client;
         static ServiceUpdater()
         {
-            var token = "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"; // use a standard name for the env variable
+            var token = "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"; // use a standard name for the env variable
 
             if (string.IsNullOrWhiteSpace(token))
                 throw new InvalidOperationException("GitHub token not found in environment variables");
