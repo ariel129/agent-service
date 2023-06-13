@@ -72,12 +72,12 @@ namespace AgentService.Service
             while (!stoppingToken.IsCancellationRequested)
             {
                 // Check for updates
-                var (isUpdateAvailable, releaseUrl) = await ServiceUpdater.CheckForUpdates(serviceName);
+                var (isUpdateAvailable, releaseUrl, assetUrl) = await ServiceUpdater.CheckForUpdates(serviceName);
 
                 if (isUpdateAvailable)
                 {
                     // Perform update logic
-                    await ServiceUpdater.PerformUpdate(serviceName, releaseUrl);
+                    await ServiceUpdater.PerformUpdate(serviceName, releaseUrl, assetUrl);
                 }
 
                 // Generate a random delay between 1 and 60 minutes.

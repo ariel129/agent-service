@@ -9,6 +9,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.ComponentModel;
 using Newtonsoft.Json.Linq;
+using System.IO.Compression;
+using System.Net;
 
 namespace AgentService.Service
 {
@@ -20,7 +22,7 @@ namespace AgentService.Service
         private static GitHubClient _client;
         static ServiceUpdater()
         {
-            var token = "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"; // use a standard name for the env variable
+            var token = "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"; // use a standard name for the env variable
 
             if (string.IsNullOrWhiteSpace(token))
                 throw new InvalidOperationException("GitHub token not found in environment variables");
@@ -31,27 +33,27 @@ namespace AgentService.Service
             };
         }
 
-        public static async Task<(bool, string)> CheckForUpdates(string serviceName)
+        public static async Task<(bool, string, string)> CheckForUpdates(string serviceName)
         {
             try
             {
-                var (isNewReleaseAvailable, latestReleaseUrl) = await GetLatestReleaseUrl();
+                var (isNewReleaseAvailable, latestReleaseUrl, assetUrl) = await GetLatestReleaseUrl();
 
                 if (!isNewReleaseAvailable)
                 {
                     Console.WriteLine("No new release available.");
-                    return (false, "");
+                    return (false, "", "");
                 }
 
                 StopService(serviceName);
                 Console.WriteLine(serviceName + " service is stopped...");
 
-                return (true, latestReleaseUrl);
+                return (true, latestReleaseUrl, assetUrl);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"An unexpected error occurred: {ex.Message}");
-                return (false, "");
+                return (false, "", "");
             }
         }
 
@@ -125,72 +127,16 @@ namespace AgentService.Service
             return process;
         }
 
-
-        private static async Task DownloadLatestRelease()
-        {
-            try
-            {
-                var (isisNewReleaseAvailable, latestReleaseUrl) = await GetLatestReleaseUrl();
-
-                Console.WriteLine(latestReleaseUrl);
-                if (string.IsNullOrEmpty(latestReleaseUrl))
-                {
-                    Console.WriteLine("No latest release URL found.");
-                    return;
-                }
-
-                Console.WriteLine("Latest release URL: " + latestReleaseUrl);
-                string releaseFileName = Path.GetFileName(latestReleaseUrl);
-
-                if (string.IsNullOrEmpty(releaseFileName))
-                {
-                    Console.WriteLine("Invalid release file name.");
-                    return;
-                }
-
-                string releaseFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, releaseFileName);
-
-                using (HttpClient client = new HttpClient())
-                {
-                    client.Timeout = TimeSpan.FromMinutes(5);
-
-                    var response = await client.GetAsync(latestReleaseUrl);
-
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        Console.WriteLine($"Request error, HTTP {response.StatusCode}: {response.ReasonPhrase}");
-                        return;
-                    }
-
-                    using (var stream = await response.Content.ReadAsStreamAsync())
-                    {
-                        using (var fileStream = new FileStream(releaseFilePath, System.IO.FileMode.Create, FileAccess.Write, FileShare.None))
-                        {
-                            await stream.CopyToAsync(fileStream);
-                        }
-                    }
-                }
-
-                Console.WriteLine("Release downloaded successfully.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("An error occurred while downloading the release.");
-                Console.WriteLine("Message: " + ex.Message);
-                Console.WriteLine("Stack Trace: " + ex.StackTrace);
-            }
-        }
-
-        private static async Task<(bool, string)> GetLatestReleaseUrl()
+        private static async Task<(bool, string, string)> GetLatestReleaseUrl()
         {
             var releases = await _client.Repository.Release.GetAll(Owner, Repo);
 
             if (releases == null || !releases.Any())
             {
                 Console.WriteLine("No releases found for this repository.");
-                return (false, null);
+                return (false, "", "");
             }
-         
+
             var latestRelease = releases.OrderByDescending(r => r.PublishedAt).First();
             Console.WriteLine(latestRelease.TagName);
             // Compare latest version on GitHub with the current version
@@ -201,26 +147,70 @@ namespace AgentService.Service
             // }
 
             var asset = latestRelease.Assets.FirstOrDefault(a => a.Name.EndsWith(".exe"));
+            var assetZip = latestRelease.Assets.FirstOrDefault(a => a.Name.EndsWith(".zip"));
             if (asset == null)
             {
                 Console.WriteLine("No .exe asset found for the latest release.");
 
-                return (false, null);
+                return (false, "", "");
             }
 
             string latestReleaseUrl = asset.BrowserDownloadUrl;
+            string? assetReleaseUrl = assetZip?.BrowserDownloadUrl;
 
-            return (true, latestReleaseUrl);
+            return (true, latestReleaseUrl, assetReleaseUrl);
         }
 
-        public static async Task PerformUpdate(string serviceName, string releaseUrl)
+        public static async Task PerformUpdate(string serviceName, string releaseUrl, string assetUrl)
         {
+            try
+            {
+                string releaseFileName = Path.GetFileName(assetUrl);
 
-            var tempFilePath = Path.Combine(Path.GetTempPath(), $"{serviceName}_update.zip");
+                string releaseFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, releaseFileName);
+                Console.WriteLine(releaseFilePath);
+                Console.WriteLine(releaseFileName);
+                using (HttpClient client = new HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromMinutes(5);
 
-            StartService(serviceName);
-            Console.WriteLine(tempFilePath + " service is started...");
+                    var response = await client.GetAsync(assetUrl);
 
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        Console.WriteLine($"Request error, HTTP {response.StatusCode}: {response.ReasonPhrase}");
+                        return;
+                    }
+                    
+                    using (var stream = await response.Content.ReadAsStreamAsync())
+                    {
+                        using (var fileStream = new FileStream(releaseFilePath, System.IO.FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            await stream.CopyToAsync(fileStream);
+                        }
+                    }
+
+                    // Extract the zip file
+                    string extractPath = AppDomain.CurrentDomain.BaseDirectory;
+
+                    Console.WriteLine("File" + releaseFilePath);
+                    Console.WriteLine("Extract" + extractPath);
+
+
+                    ZipFile.ExtractToDirectory(releaseFilePath, extractPath, true);
+
+                    Console.WriteLine("Release extracted successfully.");
+
+                }
+
+                Console.WriteLine("Release downloaded successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("An error occurred while updating the service.");
+                Console.WriteLine("Message: " + ex.Message);
+                Console.WriteLine("Stack Trace: " + ex.StackTrace);
+            }
         }
     }
 }
