@@ -82,9 +82,19 @@ namespace AgentService.Service
                     // Perform update logic
                     await ServiceUpdater.PerformUpdate(serviceName, releaseUrl);
 
-                    // Stop this service
-                    // Depending on how you're hosting this, you may need a different way to stop the service
-                    //Environment.Exit(0);
+                    
+
+                    var processStartInfo = new ProcessStartInfo("sc", $"start {serviceName}")
+                    {
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+
+                    Process.Start(processStartInfo);
+
+                    Environment.Exit(0);
                 }
 
                 // Generate a random delay between 1 and 60 minutes.

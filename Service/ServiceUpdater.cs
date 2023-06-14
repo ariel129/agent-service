@@ -177,6 +177,8 @@ namespace AgentService.Service
                 string releaseFileName = Path.GetFileName(releaseUrl);
 
                 string releaseFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, releaseFileName);
+
+                string releaseDirectoryPath = Path.GetDirectoryName(releaseFilePath)!;
                 Console.WriteLine(releaseFilePath);
                 Console.WriteLine(releaseFileName);
                 using (HttpClient client = new HttpClient())
@@ -205,9 +207,7 @@ namespace AgentService.Service
                     process.WaitForExit();
 
                     Console.WriteLine("Installer executed successfully.");
-                }
-                //StartService(serviceName);
-                Program.StartService(serviceName);
+                } 
             }
             catch (Exception ex)
             {
