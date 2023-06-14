@@ -11,6 +11,7 @@ using System.ComponentModel;
 using Newtonsoft.Json.Linq;
 using System.IO.Compression;
 using System.Net;
+using Serilog;
 
 namespace AgentService.Service
 {
@@ -18,6 +19,7 @@ namespace AgentService.Service
     {
         private const string Owner = "ariel129";
         private const string Repo = "agent-service";
+        private static readonly Serilog.ILogger Logger = Log.ForContext<ServiceUpdater>();
 
         private static GitHubClient _client;
         static ServiceUpdater()
@@ -33,32 +35,34 @@ namespace AgentService.Service
             };
         }
 
-        public static async Task<(bool, string, string)> CheckForUpdates(string serviceName)
+        public static async Task<(bool, string)> CheckForUpdates(string serviceName)
         {
             try
             {
-                var (isNewReleaseAvailable, latestReleaseUrl, assetUrl) = await GetLatestReleaseUrl();
+                var (isNewReleaseAvailable, latestReleaseUrl) = await GetLatestReleaseUrl();
 
                 if (!isNewReleaseAvailable)
                 {
                     Console.WriteLine("No new release available.");
-                    return (false, "", "");
+                    return (false, "");
                 }
 
                 StopService(serviceName);
                 Console.WriteLine(serviceName + " service is stopped...");
 
-                return (true, latestReleaseUrl, assetUrl);
+                return (true, latestReleaseUrl);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"An unexpected error occurred: {ex.Message}");
-                return (false, "", "");
+                return (false, "");
             }
         }
 
         public static void StopService(string serviceName)
         {
+            Log.Information("Service installed successfully.");
+
             if (!IsServiceRunning(serviceName))
             {
                 Console.WriteLine("Service '{0}' is not running. Skipping stop command.", serviceName);
@@ -73,10 +77,14 @@ namespace AgentService.Service
                 Console.WriteLine(process.StandardOutput.ReadToEnd());
                 throw new Exception("Failed to stop service");
             }
+
+            Log.Information("Service '{ServiceName}' has been stopped successfully", serviceName);
         }
 
         public static void StartService(string serviceName)
         {
+            Log.Information("Attempting to start service: {ServiceName}", serviceName);
+
             if (IsServiceRunning(serviceName))
             {
                 Console.WriteLine("Service '{0}' is already running. Skipping start command.", serviceName);
@@ -91,6 +99,8 @@ namespace AgentService.Service
                 Console.WriteLine(process.StandardOutput.ReadToEnd());
                 throw new Exception("Failed to start service");
             }
+
+            Log.Information("Service '{ServiceName}' has been started successfully", serviceName);
         }
 
         public static bool IsServiceRunning(string serviceName)
@@ -127,14 +137,14 @@ namespace AgentService.Service
             return process;
         }
 
-        private static async Task<(bool, string, string)> GetLatestReleaseUrl()
+        private static async Task<(bool, string)> GetLatestReleaseUrl()
         {
             var releases = await _client.Repository.Release.GetAll(Owner, Repo);
 
             if (releases == null || !releases.Any())
             {
                 Console.WriteLine("No releases found for this repository.");
-                return (false, "", "");
+                return (false, "");
             }
 
             var latestRelease = releases.OrderByDescending(r => r.PublishedAt).First();
@@ -147,25 +157,24 @@ namespace AgentService.Service
             // }
 
             var asset = latestRelease.Assets.FirstOrDefault(a => a.Name.EndsWith(".exe"));
-            var assetZip = latestRelease.Assets.FirstOrDefault(a => a.Name.EndsWith(".zip"));
+
             if (asset == null)
             {
                 Console.WriteLine("No .exe asset found for the latest release.");
 
-                return (false, "", "");
+                return (false, "");
             }
 
             string latestReleaseUrl = asset.BrowserDownloadUrl;
-            string? assetReleaseUrl = assetZip?.BrowserDownloadUrl;
 
-            return (true, latestReleaseUrl, assetReleaseUrl);
+            return (true, latestReleaseUrl);
         }
 
-        public static async Task PerformUpdate(string serviceName, string releaseUrl, string assetUrl)
+        public static async Task PerformUpdate(string serviceName, string releaseUrl)
         {
             try
             {
-                string releaseFileName = Path.GetFileName(assetUrl);
+                string releaseFileName = Path.GetFileName(releaseUrl);
 
                 string releaseFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, releaseFileName);
                 Console.WriteLine(releaseFilePath);
@@ -174,7 +183,7 @@ namespace AgentService.Service
                 {
                     client.Timeout = TimeSpan.FromMinutes(5);
 
-                    var response = await client.GetAsync(assetUrl);
+                    var response = await client.GetAsync(releaseUrl);
 
                     if (!response.IsSuccessStatusCode)
                     {
@@ -189,21 +198,16 @@ namespace AgentService.Service
                             await stream.CopyToAsync(fileStream);
                         }
                     }
+                    Process process = new Process();
+                    process.StartInfo.FileName = releaseFilePath;
+                    process.StartInfo.Arguments = "/VERYSILENT /SUPPRESSMSGBOXES";
+                    process.Start();
+                    process.WaitForExit();
 
-                    // Extract the zip file
-                    string extractPath = AppDomain.CurrentDomain.BaseDirectory;
-
-                    Console.WriteLine("File" + releaseFilePath);
-                    Console.WriteLine("Extract" + extractPath);
-
-
-                    ZipFile.ExtractToDirectory(releaseFilePath, extractPath, true);
-
-                    Console.WriteLine("Release extracted successfully.");
-
+                    Console.WriteLine("Installer executed successfully.");
                 }
-
-                Console.WriteLine("Release downloaded successfully.");
+                //StartService(serviceName);
+                Program.StartService(serviceName);
             }
             catch (Exception ex)
             {

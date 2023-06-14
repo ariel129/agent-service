@@ -18,7 +18,7 @@ namespace AgentService.Service
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+                _logger.LogInformation("Worker running ats: {time}", DateTimeOffset.Now);
 
                 var psi = new ProcessStartInfo("secedit", "/export /cfg c:\\temp\\secpol.cfg")
                 {
@@ -65,24 +65,31 @@ namespace AgentService.Service
             return base.StopAsync(cancellationToken);
         }
 
-        private static async Task CheckForUpdatesPeriodically(string serviceName, CancellationToken stoppingToken)
+        private async Task CheckForUpdatesPeriodically(string serviceName, CancellationToken stoppingToken)
         {
             var random = new Random();
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 // Check for updates
-                var (isUpdateAvailable, releaseUrl, assetUrl) = await ServiceUpdater.CheckForUpdates(serviceName);
+                var (isUpdateAvailable, releaseUrl) = await ServiceUpdater.CheckForUpdates(serviceName);
 
                 if (isUpdateAvailable)
                 {
+                    // Stop the worker
+                    _logger.LogInformation("Update available, stopping the worker at: {time}", DateTimeOffset.Now);
+
                     // Perform update logic
-                    await ServiceUpdater.PerformUpdate(serviceName, releaseUrl, assetUrl);
+                    await ServiceUpdater.PerformUpdate(serviceName, releaseUrl);
+
+                    // Stop this service
+                    // Depending on how you're hosting this, you may need a different way to stop the service
+                    //Environment.Exit(0);
                 }
 
                 // Generate a random delay between 1 and 60 minutes.
                 int delay = random.Next(1, 61) * 60 * 1000;  // Convert minutes to milliseconds.
-
+                Console.WriteLine(delay);
                 await Task.Delay(delay, stoppingToken);
             }
         }

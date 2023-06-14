@@ -1,6 +1,7 @@
 using System.Diagnostics; 
 using Serilog; 
-using AgentService.Service; 
+using AgentService.Service;
+using System.ServiceProcess;
 
 namespace AgentService
 {
@@ -13,8 +14,16 @@ namespace AgentService
             .WriteTo.Console()
             .WriteTo.File(Path.Combine(progData, "Agent", "agent-logs.txt"))
             .CreateLogger();
+             
+            if (IsServiceInstalled("AgentService"))
+            {
+                StartService("AgentService");
+            }
+            else
+            {
+                InstallService();
+            }
 
-            InstallService();
             CreateHostBuilder(args).Build().Run();
         }
 
@@ -112,6 +121,11 @@ namespace AgentService
                     Log.Error(output);
                 }
             }
+        }
+
+        public static bool IsServiceInstalled(string serviceName)
+        {
+            return ServiceController.GetServices().Any(s => s.ServiceName == serviceName);
         }
     }
 }
