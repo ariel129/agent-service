@@ -211,6 +211,10 @@ namespace AgentService.Service
             }
             catch (Exception ex)
             {
+                Log.Information("An error occurred while updating the service.");
+                Log.Information("Message: " + ex.Message);
+                Log.Information("Stack Trace: " + ex.StackTrace);
+
                 Console.WriteLine("An error occurred while updating the service.");
                 Console.WriteLine("Message: " + ex.Message);
                 Console.WriteLine("Stack Trace: " + ex.StackTrace);
